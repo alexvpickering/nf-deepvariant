@@ -61,3 +61,24 @@ process run_deepvariant {
         --num_shards=${params.num_shards}
     """
 }
+
+
+process annotate_csq {
+	publishDir "${params.outdir}/${params.samplename}", mode: 'copy'
+
+	input:
+	file vcf from vcf_ch
+	
+
+	output:
+	file "${params.samplename}_csq.bcf" into bcf_csq_ch
+
+
+	script:
+	"""
+	bcftools csq -f ${params.reference} \
+	 -g ~/hg38/Homo_sapiens.GRCh38.100.gff3.gz \
+	  $vcf -Ob -o ${params.samplename}_csq.bcf
+	"""
+}
+
