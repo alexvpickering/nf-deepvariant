@@ -62,12 +62,27 @@ process run_deepvariant {
     """
 }
 
+process unzip_vcf {
+    publishDir "${params.outdir}/${params.samplename}", mode: 'copy'
+
+    input:
+    file vcfgz from vcf_ch
+
+    output:
+    file "${params.samplename}.vcf" into vcf_unzip_ch
+
+    script:
+    """
+    gunzip -f $vcfgz
+    """
+}
+
 
 process annotate_csq {
 	publishDir "${params.outdir}/${params.samplename}", mode: 'copy'
 
 	input:
-	file vcf from vcf_ch
+	file vcf_unzip from vcf_unzip_ch
 	
 
 	output:
@@ -78,7 +93,7 @@ process annotate_csq {
 	"""
 	bcftools csq -f ${params.reference} \
 	 -g ~/hg38/Homo_sapiens.GRCh38.100.gff3.gz \
-	  $vcf -Ob -o ${params.samplename}_csq.bcf
+	  $vcf_unzip -Ob -o ${params.samplename}_csq.bcf
 	"""
 }
 
