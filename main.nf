@@ -10,7 +10,7 @@ params.reference = "/root/hg38/Homo_sapiens_assembly38.fasta"
 
 // deepvariant parameters
 params.model_type = "WES" // one of the following: [WGS,WES,PACBIO]
-params.num_shards = "4"
+params.num_shards = "6"
 
 /*
  * Create the `read_pairs_ch` channel that emits tuples containing three elements:
@@ -34,13 +34,12 @@ process map_and_sort {
 	
 	"""
 	bwa mem -t 6 -M -R '@RG\\tID:${params.readgroup}\\tSM:${params.samplename}\\tPL:ILLUMINA' $params.reference $reads \
-	| gatk SortSam -I /dev/stdin -O ${params.samplename}.sorted.bam --SORT_ORDER=coordinate --CREATE_INDEX=true
+	| gatk --java-options "-Djava.io.tmpdir=./tmp" SortSam -I /dev/stdin -O ${params.samplename}.sorted.bam --SORT_ORDER=coordinate --CREATE_INDEX=true
     """	
 }
 
 process run_deepvariant {
     publishDir "${params.outdir}/${params.samplename}", mode: 'copy'
-    label 'with_gpus'
 
     input:
     file bamfile from bamfile_ch
