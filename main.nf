@@ -1,5 +1,5 @@
 //  example:
-// nextflow run main.nf --reads "/run/media/alex/Seagate Backup Plus Drive/cincinatti_exome_data/FastQ/09KTF_TTAGGC_L002_R{1,2}_001.fastq.gz" --samplename 09KTF_TTAGGC
+// nextflow run main.nf --reads "/run/media/alex/Seagate Backup Plus Drive/cincinatti_exome_data/vikram/FastQ/09KTH_CGATGT_L001_R{1,2}_001.fastq.gz" --samplename 09KTH_CGATGT
  
  // Define the default parameters
 params.reads = ""
@@ -12,6 +12,9 @@ params.reference = "/root/hg38/Homo_sapiens_assembly38.fasta"
 params.model_type = "WES" // one of the following: [WGS,WES,PACBIO]
 params.num_shards = "6"
 
+// snpEff parameters
+params.snpgen = "GRCh38.99"
+
 /*
  * Create the `read_pairs_ch` channel that emits tuples containing three elements:
  * the pair ID, the first read-pair file and the second read-pair file
@@ -23,7 +26,7 @@ Channel
 
 
 process map_and_sort {
-	publishDir "${params.outdir}/${params.samplename}"
+	publishDir "${params.outdir}/${params.samplename}", mode: 'copy'
 
 	input:
 	tuple val(pair_id), path(reads) from read_pairs_ch
@@ -61,38 +64,35 @@ process run_deepvariant {
     """
 }
 
-process unzip_vcf {
+process annotate_vcf {
     publishDir "${params.outdir}/${params.samplename}", mode: 'copy'
 
     input:
     file vcfgz from vcf_ch
 
     output:
-    file "${params.samplename}.vcf" into vcf_unzip_ch
+    file "${params.samplename}.ann.vcf" into vcf_ann_ch
 
     script:
     """
-    gunzip -f $vcfgz
+    java -Xmx8g -jar /gatk/snpEff/snpEff.jar ${params.snpgen} $vcfgz > ${params.samplename}.ann.vcf
     """
 }
 
 
-process annotate_csq {
-	publishDir "${params.outdir}/${params.samplename}", mode: 'copy'
+process filter_vcf {
+    publishDir "${params.outdir}/${params.samplename}", mode: 'copy'
 
-	input:
-	file vcf_unzip from vcf_unzip_ch
-	
+    input:
+    file vcf_ann from vcf_ann_ch
 
-	output:
-	file "${params.samplename}_csq.bcf" into bcf_csq_ch
+    output:
+    file "${params.samplename}.ann.pass.high_mod.vcf" into vcf_filt_ch
 
-
-	script:
-	"""
-	bcftools csq -f ${params.reference} \
-	 -g ~/hg38/Homo_sapiens.GRCh38.100.gff3.gz \
-	  $vcf_unzip -Ob -o ${params.samplename}_csq.bcf
-	"""
+    script:
+    """
+    cat $vcf_ann | java -jar /gatk/snpEff/SnpSift.jar filter \
+        "FILTER = 'PASS' & ((ANN[*].IMPACT = 'HIGH') | (ANN[*].IMPACT = 'MODERATE'))"  \
+        > ${params.samplename}.ann.pass.high_mod.vcf
+    """
 }
-
